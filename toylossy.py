@@ -163,7 +163,10 @@ class LossyContextModel(ABC):
         print_if_true(f"True context: {' '.join(sequence[:-1])}", flag = verbose)
         target_word = sequence[-1]
         processing_difficulty = np.float64(0.0)
+
+        # Iterate over all possible distortions r
         for (distortion, probability) in self.get_distortions(sequence[:-1]):
+            # probability is p(r|c)
             print_if_true(f"Current distortion: {distortion}", flag = verbose)
             print_if_true(f"p(r|c) = {probability}", flag = verbose)
             if probability == 0:
@@ -171,15 +174,17 @@ class LossyContextModel(ABC):
 
             average_prob = np.float64(0.0)
             normaliser = np.float64(0.0)
+
+            # Iterate over all possible reconstructions ~c, given r
             for reconstruction in self.get_reconstructions(distortion):
                 reconstruction_with_target = reconstruction + [target_word]
-                context_probability = self.get_prob(reconstruction)
-                target_probability = self.get_prob(reconstruction_with_target)/context_probability
+                context_probability = self.get_prob(reconstruction) # p(~c)
+                target_probability = self.get_prob(reconstruction_with_target)/context_probability # p(w|~c) = p(w,~c)/p(~c)
 
                 print_if_true(f" ## Possible reconstructed context: {' '.join(reconstruction)}", flag = verbose)
 
                 print_if_true(f" ## Reconstructing sentence as: {' '.join(reconstruction_with_target)}", flag = verbose)
-                distortion_probability = self.get_distortion_probability(reconstruction, distortion)
+                distortion_probability = self.get_distortion_probability(reconstruction, distortion) # p(r|~c)
                 print_if_true(f" ## p(r|~c) = {distortion_probability}", flag = verbose)
 
                 print_if_true(f" ## p_L(~c) = {context_probability}", flag = verbose)
@@ -188,6 +193,7 @@ class LossyContextModel(ABC):
                 average_prob += context_probability * distortion_probability * target_probability
                 normaliser += context_probability * distortion_probability
 
+            # sum[p(~c)*p(r|~c)*p(w|~c)]/sum[p(r|~c)*p(~c)]
             average_prob /= normaliser
 
             print_if_true(f"E[p(w|~c)] = {average_prob}", verbose)
