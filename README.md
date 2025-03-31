@@ -1,4 +1,4 @@
-# toylossy
+# lossy
 This is the repository for the implementation of lossy-context surprisal accompanying my bachelor thesis.
 
 ## Installation
@@ -8,7 +8,7 @@ nltk
 numpy
 ```
 
-The following packages are additionally used in the notebook `toylossy_demo.ipynb`:
+The following packages are additionally used in the notebook `lossy_demo.ipynb`:
 ```
 pandas
 seaborn
@@ -23,6 +23,6 @@ There are three models already implemented: the progressive noise model used in 
 
 A model is initialised with a PCFG as the language model (a `nltk.grammar.PCFG`). To calculate processing difficulty, `LossyContextModel` offers the method `calculate_processing_difficulty`, which takes a sequence as a list of symbols from the grammar and returns the predicted processing difficulty in bits. At this point, this method does **not** check if every symbol is actually part of the grammar, so carefully check if all symbols in the sequence are contained in the grammar if the results seem odd.
 
-All commands used to generate the plots in the thesis can be found in `toylossy_demo.ipynb`.
+All commands used to generate the plots in the thesis can be found in `lossy_demo.ipynb`.
 
 The probabilities used to initiate the PCFGs for the different experiments were, mostly, calculated from Universal Dependencies corpora. The queries, frequencies and how the probabilities were calculated can be found in the file `pcfg_probs.md`
