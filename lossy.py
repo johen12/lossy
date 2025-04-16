@@ -1,8 +1,8 @@
 from nltk.grammar import PCFG
-from nltk.parse.pchart import LongestChartParser
-from nltk.parse.generate import generate
 import numpy as np
 from abc import ABC, abstractmethod
+from language import generate_language
+from typing import Callable
 
 def print_if_true(text, flag):
     if flag:
@@ -21,36 +21,13 @@ class LossyContextModel(ABC):
     the probability of a sequence `true_sequence` being distorted as a certain other sequence `distortion`.
     A distortion is the true context with zero or more words removed.
 
-    The argument `max_depth` is passed to `nltk.parse.generate`.
+    The argument `max_depth` is passed to `nltk.parse.generate.generate`.
     """
-    def __init__(self, grammar: PCFG, max_depth: int = None):
-        parser = LongestChartParser(grammar)
-
-        # generate all possible sequences from the grammar
-        self.language: list[tuple[list[str], np.float64]] = []
-        for sequence in generate(grammar, depth = max_depth):
-            sequence_prob = next(parser.parse(sequence)).prob()
-            self.language.append((sequence, np.float64(sequence_prob)))
-
-        # add subsequences to the language
-        sub_sequences = []
-        sub_sequence_probs = []
-        for (language_sequence, _) in self.language:
-            for i in range(1, len(language_sequence)):
-                sub_sequence = language_sequence[:i]
-                if sub_sequence in sub_sequences:
-                    continue
-
-                sub_sequence_prob = np.float64(0.0)
-                for (sequence, prob) in self.language:
-                    if sequence[:i] == sub_sequence:
-                        sub_sequence_prob += prob
-
-                sub_sequences.append(sub_sequence)
-                sub_sequence_probs.append(sub_sequence_prob)
-
-        self.language += list(zip(sub_sequences, sub_sequence_probs))
-
+    def __init__(self, language: PCFG | list, max_depth: int | None = None):
+        if type(language) == PCFG:
+            self.language = generate_language(language, max_depth)
+        else:
+            self.language = language
 
     def get_prob(self, sequence: list[str]) -> np.float64:
         """Calculate the a priori probability of `sequence` [p_L(sequence)]."""
@@ -84,7 +61,7 @@ class LossyContextModel(ABC):
         for length in range(len(sequence), -1, -1):
             distortions += [(distortion, self.get_distortion_probability(sequence, distortion))
                             for distortion in self._get_distortions_of_length(sequence, length)]
-            
+
         return distortions
 
 
@@ -148,7 +125,7 @@ class LossyContextModel(ABC):
             A sequence of words from the grammar, with the last being the word for which
             processing difficulty is calculated.
 
-        verbose : bool
+        verbose : bool (default `False`)
             Set to `True` for detailed output.
 
         Returns
@@ -203,7 +180,78 @@ class LossyContextModel(ABC):
 
         print_if_true(f"D(w|c) = {processing_difficulty}", verbose)
         return processing_difficulty
+
+
+    def cache_calculate_processing_difficulty(self, sequence: list[str]) -> Callable[[], np.float64]:
+        """
+        Returns a function to calculate the processing difficulty of the given
+        sequence.
+
+        This can be used if processing difficulty should be calculated for the same
+        sequence very many times with different parameters, which otherwise can take a
+        very long time.
+
+        Args
+        ----
+        sequence : list
+            The sequence for which processing difficulty should be calculated.
+
+        Returns
+        -------
+        Callable[[], np.float64]
+            A function that takes no arguments and returns the processing difficulty
+            calculated with the parameters of the underlying `LossyContextModel`.
+        """
+        target_word = sequence[-1]
     
+        distortions_with_probs = self.get_distortions(sequence[:-1])
+
+        distortions                    = []
+        reconstructions_per_distortion = []
+        context_probs_per_distortion   = []
+        target_probs_per_distortion    = []
+        for (distortion, _) in distortions_with_probs:
+            distortions.append(distortion)
+            reconstructions = self.get_reconstructions(distortion)
+            reconstructions_per_distortion.append(reconstructions)
+
+            curr_context_probs = []
+            curr_target_probs  = []
+            for reconstruction in reconstructions:
+                curr_context_prob = self.get_prob(reconstruction)
+                curr_context_probs.append(curr_context_prob)
+                curr_target_probs.append(self.get_prob(reconstruction + [target_word])/curr_context_prob)
+
+            context_probs_per_distortion.append(curr_context_probs)
+            target_probs_per_distortion.append(curr_target_probs)
+
+        def _processing_difficulty() -> np.float64:
+            processing_difficulty = np.float64(0.0)
+            for (distortion, reconstructions, context_probs, target_probs) in \
+                zip(distortions,
+                    reconstructions_per_distortion,
+                    context_probs_per_distortion,
+                    target_probs_per_distortion):
+
+                true_distortion_probability = self.get_distortion_probability(sequence[:-1], distortion)
+
+                if true_distortion_probability == 0:
+                    continue
+
+                average_prob = np.float64(0.0)
+                normaliser = np.float64(0.0)
+                for (reconstruction, context_probability, target_probability) in zip(reconstructions, context_probs, target_probs):
+                    reconstruction_distortion_probability = self.get_distortion_probability(reconstruction, distortion)
+
+                    average_prob += context_probability * reconstruction_distortion_probability * target_probability
+                    normaliser += context_probability * reconstruction_distortion_probability
+
+                average_prob /= normaliser
+                processing_difficulty += -np.log2(average_prob) * true_distortion_probability
+
+            return processing_difficulty
+        
+        return _processing_difficulty
 
     def calculate_sequence_processing_difficulty(self, sequence: list[str]) -> np.array:
         return np.array([self.calculate_processing_difficulty(sequence[:i+1]) for i in range(len(sequence))])
@@ -233,7 +281,7 @@ class SurprisalModel(LossyContextModel):
 
     def get_distortion_probability(self, true_sequence: list[str], distortion: list[str]) -> np.float64:
         return np.float64(1.0 if distortion == true_sequence else 0.0)
-    
+
 
 class ProgressiveNoiseModel(LossyContextModel):
     """
