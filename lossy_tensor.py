@@ -5,8 +5,7 @@ from language import generate_language
 from typing import Callable
 import pytensor.tensor as pt
 from pytensor.tensor import TensorVariable
-from pytensor.printing import pp
-import pymc as pm
+from pytensor import ifelse
 
 def print_if_true(text, flag):
     if flag:
@@ -264,60 +263,65 @@ class LossyContextModel(ABC):
         return _processing_difficulty
 
 
-    def cache_processing_difficulty_graph(self, sequence: list[str], *model_params) -> TensorVariable:
-        target_word  = sequence[-1]
+    def cache_processing_difficulty_graph(self, sequence, *model_params) -> TensorVariable:
+        if len(sequence) == 1:
+            return pt.as_tensor_variable(-np.log2(self.get_prob(sequence)))
+        
+        target_word = sequence[-1]
         true_context = sequence[:-1]
-
-        distortions_with_probs = self.get_distortions(true_context)
-
-        distortions                    = []
-        true_distortion_probs          = []
-        reconstructions_per_distortion = []
-        rec_dist_probs_per_distortion  = []
-        context_probs_per_distortion   = []
-        target_probs_per_distortion    = []
-        for (distortion, _) in distortions_with_probs:
-            distortions.append(distortion)
-            true_distortion_probs.append(self.compute_distortion_graph(true_context, distortion, *model_params))
-            reconstructions = self.get_reconstructions(distortion)
-            reconstructions_per_distortion.append(reconstructions)
-
-            curr_context_probs  = []
-            curr_target_probs   = []
-            curr_rec_dist_probs = []
-            for reconstruction in reconstructions:
-                curr_rec_dist_probs.append(self.compute_distortion_graph(reconstruction, distortion, *model_params))
-                curr_context_prob = self.get_prob(reconstruction)
-                curr_context_probs.append(curr_context_prob)
-                curr_target_probs.append(self.get_prob(reconstruction + [target_word])/curr_context_prob)
-
-            rec_dist_probs_per_distortion.append(np.array(curr_rec_dist_probs))
-            context_probs_per_distortion.append(np.array(curr_context_probs))
-            target_probs_per_distortion.append(np.array(curr_target_probs))
+        processing_difficulty = np.float64(0.0)
+        for (true_context_distortion, _) in self.get_distortions(true_context):
+            true_distortion_probability = self.compute_distortion_graph(
+                true_context,
+                true_context_distortion,
+                *model_params
+            )
 
 
-        processing_difficulties = []
-        for (true_dist_prob, rec_dist_probs, context_probs, target_probs) in \
-            zip(true_distortion_probs, rec_dist_probs_per_distortion, context_probs_per_distortion, target_probs_per_distortion):
-            average_probs = context_probs * rec_dist_probs * target_probs
-            normalizer = context_probs * rec_dist_probs
+            average_prob = np.float64(0.0)
+            normaliser = np.float64(0.0)
 
-            average_prob = average_probs.sum() / normalizer.sum()
-            processing_difficulties.append(-pt.log2(average_prob) * true_dist_prob)
+            for reconstruction in self.get_reconstructions(true_context_distortion):
+                reconstruction_with_target = reconstruction + [target_word]
+                rec_context_probability = self.get_prob(reconstruction)
+                target_probability = self.get_prob(reconstruction_with_target)/rec_context_probability
 
-        return np.array(processing_difficulties).sum()
+                rec_distortion_probability = self.compute_distortion_graph(
+                    reconstruction,
+                    true_context_distortion,
+                    *model_params
+                )    
+                
 
+                average_prob += rec_context_probability * rec_distortion_probability * target_probability
+                normaliser += rec_context_probability * rec_distortion_probability
 
-    def gen_processing_difficulty_calculator(self, sequences: list[list[str]]) -> Callable:
-        def _calculator(*model_params) -> TensorVariable:
-            return pt.as_tensor_variable([
-                self.cache_processing_difficulty_graph(sequence, *model_params)
-                for sequence in sequences
-            ])
+            average_prob /= normaliser
+            processing_difficulty += ifelse(true_distortion_probability > 0.0, -pt.log2(average_prob) * true_distortion_probability, np.float64(0.0))
 
-        return _calculator
+        return processing_difficulty
+
 
     def processing_difficulty(self, sequences: list[list[str]], *model_params) -> TensorVariable:
+        """
+        Generates a PyTensor `TensorVariable` for calculating the estimated processing difficulty
+        for each of the sequences in `sequences` using the model parameters given.
+
+        Args
+        ----
+        sequences : list
+            A list of sequences, each being a list of strings.
+
+        *model_params
+            The model parameters as tensor variables to be passed onto
+            `cache_processing_difficulty_graph` and then `compute_distortion_graph`.
+
+        Returns
+        -------
+        TensorVariable
+            A `TensorVariable` calculating processing difficulty for each
+            sequence.
+        """
         return pt.as_tensor_variable([
             self.cache_processing_difficulty_graph(sequence, *model_params)
             for sequence in sequences
@@ -365,18 +369,16 @@ class ProgressiveNoiseModel(LossyContextModel):
         delta = model_params[0]
         nu = model_params[1]
 
-        probs = []
+        prob = np.float64(1.0)
         for (i, word) in enumerate(true_sequence):
             steps_back = len(true_sequence) - (i+1)
             retention_probability = delta*nu**steps_back
             if word in distortion:
-                probs.append(retention_probability)
+                prob *= retention_probability
             else:
-                probs.append(1-retention_probability)
+                prob *= 1-retention_probability
 
-        probs = np.array(probs)
-
-        return probs.prod()
+        return prob
 
 
     def set_delta(self, delta: np.float64):
