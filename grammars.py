@@ -1,4 +1,5 @@
 import numpy as np
+from nltk.grammar import PCFG
 
 def gen_russian_grammar_exp2(
     p_src: np.float64, 
@@ -21,20 +22,6 @@ def gen_russian_grammar_exp2(
     AdjIntv -> 'Adj1' [{p_one_adj*0.5}] | 'Adj1' 'Adj2' [{(1-p_one_adj)*0.5}] | 'Adj2' [{p_one_adj*0.5}] | 'Adj2' 'Adj1' [{(1-p_one_adj)*0.5}]
     """
 
-def gen_hindi_grammar_exp1(
-    p_src: np.float64, 
-    p_src_local: np.float64,
-    p_obj_elision: np.float64,
-    p_orc_local: np.float64,
-    p_subj_elision: np.float64,
-) -> str:
-    return f"""
-    RC -> SRC [{p_src}] | ORC [{1-p_src}]
-    SRC -> 'RPErg' InnerSRC [{1-p_obj_elision}] | 'RPErg' 'V' [{p_obj_elision}]
-    InnerSRC -> 'DO' 'V' [{1-p_src_local}] | 'V' 'DO' [{p_src_local}]
-    ORC -> 'RPAcc' InnerORC [{1-p_subj_elision}] | 'RPAcc' 'V' [{p_subj_elision}]
-    InnerORC -> 'Subj' 'V' [{1-p_orc_local}] | 'V' 'Subj' [{p_orc_local}]
-    """
 
 def gen_hindi_grammar_exp2(
     p_cp: np.float64,
@@ -61,3 +48,57 @@ def gen_hindi_grammar_exp2(
     SPIntv -> 'Adj1' [{p_sp_short*0.5}] | 'Adj2' [{p_sp_short*0.5}] | 'Adj1' 'Adj2' [{(1-p_sp_short)*0.5}] | 'Adj2' 'Adj1' [{(1-p_sp_short)*0.5}]
     SPVerb -> 'LightVerb' [{p_sp_lightverb}] | 'OtherVerb' [{1-p_sp_lightverb}]
     """
+
+# the grammars used in the article
+pcfg_russian = PCFG.fromstring(
+    gen_russian_grammar_exp2(
+        p_src = 0.58, 
+        p_src_local = 0.99,
+        p_src_case_marked = 0.9,
+        p_orc_local = 0.36,
+        p_orc_case_marked = 0.83,
+        p_one_arg = 0.97, 
+        p_adj_interveners = 0.16, 
+        p_one_adj = 0.95
+    )
+)
+
+hindi_p_cp = 0.5
+hindi_p_cp_intv = 0.05
+hindi_p_cp_short = 0.99
+hindi_p_cp_lightverb = 0.75
+hindi_p_sp_intv = 0.06
+hindi_p_sp_short = 0.99
+hindi_p_sp_lightverb = 0.18
+
+persian_p_cp = 0.72
+persian_p_cp_intv = 0.0002
+persian_p_cp_short = 0.999
+persian_p_cp_lightverb = 0.64
+persian_p_sp_intv = 0.02
+persian_p_sp_short = 0.99
+persian_p_sp_lightverb = 0.33
+
+pcfg_cpsp_hindi = PCFG.fromstring(
+    gen_hindi_grammar_exp2(
+        p_cp = hindi_p_cp,
+        p_cp_intv = hindi_p_cp_intv,
+        p_cp_short = hindi_p_cp_short,
+        p_cp_lightverb = hindi_p_cp_lightverb,
+        p_sp_intv = hindi_p_sp_intv,
+        p_sp_short = hindi_p_sp_short,
+        p_sp_lightverb = hindi_p_sp_lightverb
+    )
+)
+
+pcfg_cpsp_persian = PCFG.fromstring(
+    gen_hindi_grammar_exp2(
+        p_cp = persian_p_cp,
+        p_cp_intv = persian_p_cp_intv,
+        p_cp_short = persian_p_cp_short,
+        p_cp_lightverb = persian_p_cp_lightverb,
+        p_sp_intv = persian_p_sp_intv,
+        p_sp_short = persian_p_sp_short,
+        p_sp_lightverb = persian_p_sp_lightverb
+    )
+)
