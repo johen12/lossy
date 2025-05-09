@@ -52,12 +52,12 @@ def gen_hindi_grammar_exp2(
 # the grammars used in the article
 pcfg_russian = PCFG.fromstring(
     gen_russian_grammar_exp2(
-        p_src = 0.58, 
-        p_src_local = 0.99,
+        p_src = 0.57,#0.58, 
+        p_src_local = 0.94,#0.99,
         p_src_case_marked = 0.9,
-        p_orc_local = 0.36,
+        p_orc_local = 0.37,#0.36,
         p_orc_case_marked = 0.83,
-        p_one_arg = 0.97, 
+        p_one_arg = 0.93,#0.97, 
         p_adj_interveners = 0.16, 
         p_one_adj = 0.95
     )

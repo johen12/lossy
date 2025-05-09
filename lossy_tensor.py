@@ -32,6 +32,7 @@ class LossyContextModel(ABC):
         else:
             self.language = language
 
+
     def get_prob(self, sequence: list[str]) -> np.float64:
         """Calculate the a priori probability of `sequence` [p_L(sequence)]."""
         for (language_sequence, probability) in self.language:
@@ -290,7 +291,7 @@ class LossyContextModel(ABC):
                     reconstruction,
                     true_context_distortion,
                     *model_params
-                )    
+                )
                 
 
                 average_prob += rec_context_probability * rec_distortion_probability * target_probability

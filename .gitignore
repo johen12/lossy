@@ -3,3 +3,5 @@ simulate.py
 /pcfg_probs_files
 only_hindi_exp1.ipynb
 settings.json
+.python-version
+uv.lock

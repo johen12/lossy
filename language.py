@@ -2,7 +2,7 @@ from nltk.parse.pchart import LongestChartParser
 from nltk.parse.generate import generate
 from nltk.grammar import PCFG
 import numpy as np
-import regex
+import re
 
 def generate_language(
     grammar: PCFG,
@@ -76,7 +76,7 @@ def read_language(filename: str) -> list[tuple[list[str], np.float64]]:
     language: list[tuple[list[str], np.float64]] = []
     for line in lines:
         line = line.strip()
-        groups = regex.match(r'(.+):([0-9\.\-e]+)', line)
+        groups = re.match(r'(.+):([0-9\.\-e]+)', line)
         sequence = groups[1].split(" ")
         prob = np.float64(groups[2])
         language.append((sequence, prob))

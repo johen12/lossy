@@ -1,0 +1,370 @@
+---
+title: Memory and expectation under the same roof
+subtitle: Plots and analysis
+echo: false
+format:
+    pdf:
+        documentclass: article
+        margin-left: 20mm
+        margin-right: 20mm
+---
+
+```{python}
+#| label: setup
+#| echo: false
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+from pytensor import function
+import pytensor.tensor as pt
+import expdata
+from matplotlib.colors import CenteredNorm
+
+from lossy_tensor import ProgressiveNoiseModel
+from grammars import pcfg_russian, pcfg_cpsp_hindi, pcfg_cpsp_persian
+
+sns.set_theme()
+
+def gen_diffs(sequence1: list[str], 
+              sequence2: list[str],
+              model: ProgressiveNoiseModel,
+              max_retention_probabilities: np.array,
+              rate_falloffs: np.array,
+              max_depth = None):
+    diffs = np.zeros(
+        (len(max_retention_probabilities), len(rate_falloffs))
+    )
+    delta = pt.scalar("delta")
+    nu = pt.scalar("nu")
+    processing_difficulty = function(
+        [delta, nu],
+        model.processing_difficulty([sequence1, sequence2], delta, nu)
+    )
+    for (i, max_rp) in enumerate(max_retention_probabilities):
+        for (j, rf) in enumerate(rate_falloffs):
+            [D_seq1, D_seq2] = processing_difficulty(max_rp, rf)
+            diffs[i, j] = D_seq1 - D_seq2
+            if np.isnan(diffs[i, j]):
+                print(max_rp, rf)
+
+    return diffs
+
+def plot_diff_heatmap(
+    sequence1: list[str],
+    sequence2: list[str],
+    model: ProgressiveNoiseModel,
+    axis,
+    step = 0.01,
+    split = 5,
+    shrink = 0.7,
+    render_label = True,
+    label = "Difference in processing difficulty (bits)",
+    **kwargs
+):
+    deltas = np.arange(0, 1.0 + step, step)
+    nus = np.arange(0, 1.0 + step, step)
+
+    diffs = gen_diffs(sequence1, sequence2, model, deltas, nus)
+
+    yticklabels = [f"{val:.2f}" if i % split == 0 else "" for (i, val) in enumerate(deltas)]
+    xticklabels = [f"{val:.2f}" if i % split == 0 else "" for (i, val) in enumerate(nus)]
+
+    norm = CenteredNorm(vcenter = 0)
+
+    cbar_kws = dict(shrink = shrink)
+    if render_label:
+        cbar_kws["label"] = label
+
+    sns.heatmap(
+        diffs,
+        xticklabels = xticklabels,
+        yticklabels = yticklabels,
+        cmap = "coolwarm",
+        norm = norm,
+        rasterized = True,
+        square = True,
+        cbar_kws = cbar_kws,
+        ax = axis,
+        **kwargs
+    ).set(
+        xlabel = "$\\nu$",
+        ylabel = "$\\delta$"
+    )
+
+model_russian = ProgressiveNoiseModel(pcfg_russian, 0, 0)
+```
+
+# Russian experiment
+## Grammar
+
+| **Rule**                           | **Probability**                                                    |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| RC $\to$ SRC                       | $p(\text{SRC})$                                                    |
+| RC $\to$ ORC                       | $1-p(\text{SRC})$                                                  |
+| SRC $\to$ SRCRP 'V' ArgSRC         | $p(\text{SRC Local})(1-p(\text{Adjunct intervener}))$              |
+| SRC $\to$ SRCRP ArgSRC 'V'         | $(1-p(\text{SRC Local}))(1-p(\text{Adjunct intervener}))$          |
+| SRC $\to$ SRCRP AdjIntv 'V' ArgSRC | $p(\text{Adjunct intervener})p(\text{SRC Local})$                  |
+| SRC $\to$ SRCRP AdjIntv ArgSRC 'V' | $p(\text{Adjunct intervener})(1-p(\text{SRC Local}))$              |
+| SRCRP $\to$ 'RPNom'                | $p(\text{SRC Case marked})$                                        |
+| SRCRP $\to$ 'chto'                 | $1-p(\text{SRC Case marked})$                                      |
+| ArgSRC $\to$ 'DO'                  | $p(\text{One argument})$                                           |
+| ArgSRC $\to$ 'DO' 'IO'             | $1-p(\text{One argument})$                                         |
+| ORC $\to$ ORCRP 'V' ArgORC         | $p(\text{ORC Local})(1-p(\text{Adjunct intervener}))$              |
+| ORC $\to$ ORCRP ArgORC 'V'         | $(1-p(\text{ORC Local}))(1-p(\text{Adjunct intervener}))$          |
+| ORC $\to$ ORCRP AdjIntv 'V' ArgORC | $p(\text{Adjunct intervener})p(\text{ORC Local})$                  |
+| ORC $\to$ ORCRP AdjIntv ArgORC 'V' | $p(\text{Adjunct intervener})(1-p(\text{ORC Local}))$              |
+| ORCRP $\to$ 'RPAcc'                | $p(\text{ORC Case marked})$                                        |
+| ORCRP $\to$ 'chto'                 | $1-p(\text{ORC Case marked})$                                      |
+| ArgORC $\to$ 'Subj'                | $p\left( \text{One argument} \right)$                              |
+| ArgORC $\to$ 'Subj' 'IO'           | $1-p\left( \text{One argument} \right)$                            |
+| AdjIntv $\to$ 'Adj1'               | $p(\text{One adjunct})\cdot 0.5$                                   |
+| AdjIntv $\to$ 'Adj2'               | $p(\text{One adjunct})\cdot 0.5$                                   |
+| AdjIntv $\to$ 'Adj1' 'Adj2'        | $0.5(1-p(\text{One adjunct}))$                                     |
+| AdjIntv $\to$ 'Adj2' 'Adj1'[^note] | $0.5(1-p(\text{One adjunct}))$                                     |
+
+: The PCFG used to model the Russian results. Terminal symbols are surrounded by single quotes. {#tbl-rus-pcfg} {tbl-colwidths="[50, 50]"}
+
+[^note]: The use of two unique adjunct symbols is a consequence of the implementation of the progressive noise model. Using the same symbol for both adjuncts makes it impossible to discern if the first or the second adjunct has been deleted, and since the retention probability is dependent on the position of the word, the distortion probability becomes impossible to calculate correctly.
+
+### Probabilities
+The probabilities were calculated as in @tbl-rus-probs.
+
+| **Probability**             | **Expression**                                                                                                                  | **Calculation**                            | **Value[^2]** |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------- |
+| $p(\text{SRC})$             | $\frac{\text{total number of SRCs}}{\text{total number of RCs}}$                                                                | $\frac{154+9+17+2}{154+9+17+2+42+74+9+14}$ | $0.57$                            |
+| $p(\text{SRC local})$       | $\frac{\text{total number of local SRCs}}{\text{total number of SRCs}}$                                                         | $\frac{154+17}{154+17+9+2}$                | $0.94$                            |
+| $p(\text{SRC case-marked})$ | $\frac{\text{total number of case-marked SRCs}}{\text{total number of SRCs}}$                                                   | $\frac{154+9}{154+9+17+2}$                 | $0.9$                             |
+| $p(\text{ORC local})$       | $\frac{\text{total number of local ORCs}}{\text{total number of ORCs}}$                                                         | $\frac{42+9}{52+9+74+14}$                  | $0.37$                            |
+| $p(\text{ORC case marked})$ | $\frac{\text{total number of case-marked ORCs}}{\text{total number of ORCs}}$                                                   | $\frac{42+74}{42+74+9+14}$                 | $0.83$                            |
+| $p(\text{AdjIntv})$         | $\frac{\text{at least one adjunct intervener}}{\text{any number of interveners}}$                                               | $\frac{925}{5851}$                         | $0.16$                            |
+| $p(\text{One adjunct})$     | $\frac{\text{at least one adjunct intervener}-\text{at least two adjunct interveners}}{\text{at least one adjunct intervener}}$ | $\frac{925-49}{925}$                       | $0.95$                            |
+| $p(\text{One argument})$    | $\frac{\text{at least one argument}-\text{at least two arguments}}{\text{at least one argument}}$                               | $\frac{1621-107}{1621}$                    | $0.93$                            |
+
+: Probabilities used in the Russian PCFG. The first five were gathered from Table 1 of Levy (p. 467) and the last three using the PML Tree Query Engine (see section Queries below). {#tbl-rus-probs} {tbl-colwidths="[20, 50, 23, 7]"}
+
+[^2]: Rounded to two digits.
+
+#### Queries
+*Any number of interveners:*
+```
+a-node $v := [
+  tag="VERB",
+  deprel = "acl:relcl",
+  child a-node $r := [
+    tag = "PRON",
+    lemma = "который"
+  ],
+] >> count()
+```
+
+*At least one adjunct intervener:*
+```
+a-node $v := [
+  tag="VERB",
+  deprel = "acl:relcl",
+  child a-node $r := [
+    tag = "PRON",
+    lemma = "который",
+  ],
+  
+  child a-node [
+    tag = "ADV",
+    deprel = "advmod",
+    order-follows $r,
+    order-precedes $v
+  ]
+] >> count()
+```
+
+*At least two adjunct interveners:*
+```
+a-node $v := [
+  tag="VERB",
+  deprel = "acl:relcl",
+  child a-node $r := [
+    tag = "PRON",
+    lemma = "который",
+  ],
+  
+  child a-node [
+    tag = "ADV",
+    deprel = "advmod",
+    order-follows $r,
+    order-precedes $v
+  ],
+  
+  child a-node [
+    tag = "ADV",
+    deprel = "advmod",
+    order-follows $r,
+    order-precedes $v
+  ],
+] >> count()
+```
+
+*At least one argument:*
+```
+a-node $v := [
+  tag="VERB",
+  deprel = "acl:relcl",
+  child a-node $r := [
+    tag = "PRON",
+    lemma = "который",
+    deprel = "nsubj" or deprel = "obj"
+  ],
+  
+  child a-node [
+    deprel = "obj" or deprel = "nsubj",
+  ],
+  
+  child a-node [
+    deprel = "iobj"
+  ]
+] >> count()
+```
+
+*At least two arguments:*
+```
+a-node $v := [
+  tag="VERB",
+  deprel = "acl:relcl",
+  child a-node $r := [
+    tag = "PRON",
+    lemma = "который",
+    deprel = "nsubj" or deprel = "obj"
+  ],
+  
+  child a-node [
+    deprel = "obj" or deprel = "nsubj",
+  ],
+  
+  child a-node [
+    deprel = "iobj"
+  ]
+] >> count()
+```
+
+## Results
+### Experiment 1
+#### Experiment 1a
+In Experiment 1a, subject- and object-extracted relative clauses were investigated, with the main manipulation being the placement of the verb (directly following the )
+
+```{python}
+#| label: fig-rus-exp1a-heatmap-verb
+#| fig-cap: "Difference in processing difficulty at the verb between non-local and local SRCs (a) and ORCs (b), respectively. Red indicates locality and blue anti-locality."
+#| layout-ncol: 2
+#| fig-subcap:
+#|   - "Subject-extracted relative clauses."
+#|   - "Object-extracted relative clauses."
+
+plot_diff_heatmap("RPNom DO V".split(), "RPNom V".split(), model_russian, plt.gca())
+plt.show();
+plot_diff_heatmap("RPAcc Subj V".split(), "RPAcc V".split(), model_russian, plt.gca())
+plt.show();
+```
+
+```{python}
+#| label: fig-rus-exp1a-heatmap-acc
+#| fig-cap: "Difference in processing difficulty at the accusative NP placed postverbally and preverbally. Blue indicates a surprisal effect, in line with the empirical results."
+
+plot_diff_heatmap("RPNom V DO".split(), "RPNom DO".split(), model_russian, plt.gca())
+plt.show();
+```
+
+#### Experiment 1b
+```{python}
+#| label: fig-rus-exp1b-heatmap-verb
+#| fig-cap: "Difference in processing difficulty at the verb between non-local and local SRCs (a) and ORCs (b) with the case-synchretized relative pronoun 'chto', respectively. Red indicates locality and blue anti-locality."
+#| layout-ncol: 2
+#| fig-subcap:
+#|   - "Case-synchretized subject-extracted relative clauses."
+#|   - "Case-synchretized object-extracted relative clauses."
+
+plot_diff_heatmap("chto DO V".split(), "chto V".split(), model_russian, plt.gca())
+plt.show();
+plot_diff_heatmap("chto Subj V".split(), "chto V".split(), model_russian, plt.gca())
+plt.show();
+```
+
+### Experiment 2
+```{python}
+#| label: fig-rus-exp2-heatmap-verb
+#| fig-cap: "Difference in predicted processing difficulty at the verb between Experiment 2 conditions. Red indicates locality and blue anti-locality. Note also the much smaller scales of the effect of adjunct interveners."
+#| fig-subcap:
+#|   - "Argument interveners."
+#|   - "Adjunct interveners."
+
+split = 20
+shrink = 0.35
+
+fig_arg, axes_arg = plt.subplots(1, 3, sharex = True, sharey = True)
+
+plot_diff_heatmap("RPNom DO V".split(),
+                  "RPNom V".split(),
+                  model_russian,
+                  axes_arg[0],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+axes_arg[0].set_title("1 Arg - 0 Intv")
+
+plot_diff_heatmap("RPNom DO IO V".split(),
+                  "RPNom DO V".split(),
+                  model_russian,
+                  axes_arg[1],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+axes_arg[1].set_title("2 Args - 1 Arg")
+axes_arg[1].set_ylabel("")
+
+plot_diff_heatmap("RPNom DO IO V".split(),
+                  "RPNom V".split(),
+                  model_russian,
+                  axes_arg[2],
+                  split = split,
+                  shrink = shrink,
+                  label = "Difference (bits)")
+axes_arg[2].set_title("2 Args - 0 Intv")
+axes_arg[2].set_ylabel("")
+
+plt.subplots_adjust(wspace = 0.5)
+
+plt.show();
+
+fig_adj, axes_adj = plt.subplots(1, 3, sharex = True, sharey = True)
+
+plot_diff_heatmap("RPNom Adj1 V".split(),
+                  "RPNom V".split(),
+                  model_russian,
+                  axes_adj[0],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+axes_adj[0].set_title("1 Adj - 0 Intv")
+
+plot_diff_heatmap("RPNom Adj1 Adj2 V".split(),
+                  "RPNom Adj1 V".split(),
+                  model_russian,
+                  axes_adj[1],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+axes_adj[1].set_title("2 Adjs - 1 Adj")
+axes_adj[1].set_ylabel("")
+
+plot_diff_heatmap("RPNom Adj1 Adj2 V".split(),
+                  "RPNom V".split(),
+                  model_russian,
+                  axes_adj[2],
+                  split = split,
+                  shrink = shrink,
+                  label = "Difference (bits)")
+axes_adj[2].set_title("2 Adjs - 0 Intv")
+axes_adj[2].set_ylabel("")
+
+plt.subplots_adjust(wspace = 0.5)
+
+plt.show();
+```
