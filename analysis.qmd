@@ -22,7 +22,7 @@ import expdata
 from matplotlib.colors import CenteredNorm
 
 from lossy_tensor import ProgressiveNoiseModel
-from grammars import pcfg_russian, pcfg_cpsp_hindi, pcfg_cpsp_persian
+from grammars import *
 
 sns.set_theme()
 
@@ -92,7 +92,12 @@ def plot_diff_heatmap(
         ylabel = "$\\delta$"
     )
 
+    axis.tick_params("x", rotation = 90)
+    axis.tick_params("y", rotation = 0)
+
 model_russian = ProgressiveNoiseModel(pcfg_russian, 0, 0)
+model_hindi = ProgressiveNoiseModel(pcfg_cpsp_hindi, 0, 0)
+model_persian = ProgressiveNoiseModel(pcfg_cpsp_persian, 0, 0)
 ```
 
 # Russian experiment
@@ -144,6 +149,9 @@ The probabilities were calculated as in @tbl-rus-probs.
 : Probabilities used in the Russian PCFG. The first five were gathered from Table 1 of Levy (p. 467) and the last three using the PML Tree Query Engine (see section Queries below). {#tbl-rus-probs} {tbl-colwidths="[20, 50, 23, 7]"}
 
 [^2]: Rounded to two digits.
+
+#### Counts
+
 
 #### Queries
 *Any number of interveners:*
@@ -252,6 +260,7 @@ In Experiment 1a, subject- and object-extracted relative clauses were investigat
 
 ```{python}
 #| label: fig-rus-exp1a-heatmap-verb
+#| fig-pos: H
 #| fig-cap: "Difference in processing difficulty at the verb between non-local and local SRCs (a) and ORCs (b), respectively. Red indicates locality and blue anti-locality."
 #| layout-ncol: 2
 #| fig-subcap:
@@ -266,6 +275,7 @@ plt.show();
 
 ```{python}
 #| label: fig-rus-exp1a-heatmap-acc
+#| fig-pos: H
 #| fig-cap: "Difference in processing difficulty at the accusative NP placed postverbally and preverbally. Blue indicates a surprisal effect, in line with the empirical results."
 
 plot_diff_heatmap("RPNom V DO".split(), "RPNom DO".split(), model_russian, plt.gca())
@@ -275,6 +285,7 @@ plt.show();
 #### Experiment 1b
 ```{python}
 #| label: fig-rus-exp1b-heatmap-verb
+#| fig-pos: H
 #| fig-cap: "Difference in processing difficulty at the verb between non-local and local SRCs (a) and ORCs (b) with the case-synchretized relative pronoun 'chto', respectively. Red indicates locality and blue anti-locality."
 #| layout-ncol: 2
 #| fig-subcap:
@@ -290,6 +301,7 @@ plt.show();
 ### Experiment 2
 ```{python}
 #| label: fig-rus-exp2-heatmap-verb
+#| fig-pos: H
 #| fig-cap: "Difference in predicted processing difficulty at the verb between Experiment 2 conditions. Red indicates locality and blue anti-locality. Note also the much smaller scales of the effect of adjunct interveners."
 #| fig-subcap:
 #|   - "Argument interveners."
@@ -365,6 +377,255 @@ axes_adj[2].set_title("2 Adjs - 0 Intv")
 axes_adj[2].set_ylabel("")
 
 plt.subplots_adjust(wspace = 0.5)
+
+plt.show();
+```
+
+# Persian and Hindi
+## Grammar
+| **Rule**                          | **Probability**                           |
+| --------------------------------- | ----------------------------------------- |
+| S $\to$ CPP                       | $p(\text{CP})$                            |
+| CPP $\to$ 'CPNoun' CPIntv CPVerb  | $p(\text{CP Intervener})$                 |
+| CPP $\to$ 'CPNoun' CPVerb         | $1-p(\text{CP Intervener})$               |
+| CPIntv $\to$ 'Adj1'               | $0.5\cdot p(\text{CP Short})$             |
+| CPIntv $\to$ 'Adj2'               | $0.5\cdot p(\text{CP Short})$             |
+| CPIntv $\to$ 'Adj1' 'Adj2'        | $0.5(1-p(\text{CP Short}))$               |
+| CPIntv $\to$ 'Adj2' 'Adj1'        | $0.5(1-p(\text{CP Short}))$               |
+| CPVerb $\to$ 'LightVerb'          | $p(\text{Light verb}\mid \text{CP})$      |
+| CPVerb $\to$ 'OtherVerb'          | $1-p(\text{Light verb}\mid \text{CP})$    |
+| S $\to$ SPP                       | $1-p(\text{CP})$                          |
+| SPP $\to$ 'SPNoun' SPIntv SPVerb  | $p(\text{SP Intervener})$                 |
+| SPP $\to$ 'SPNoun' SPVerb         | $1-p(\text{SP Intervener})$               |
+| SPIntv $\to$ 'Adj1'               | $0.5\cdot p(\text{SP Short})$             |
+| SPIntv $\to$ 'Adj2'               | $0.5\cdot p(\text{SP Short})$             |
+| SPIntv $\to$ 'Adj1' 'Adj2'        | $0.5(1-p(\text{SP Short}))$               |
+| SPIntv $\to$ 'Adj2' 'Adj1'        | $0.5(1-p(\text{SP Short}))$               |
+| SPVerb $\to$ 'LightVerb'          | $p(\text{Light verb}\mid \text{SP})$      |
+| SPVerb $\to$ 'OtherVerb'          | $1-p(\text{Light verb}\mid \text{SP})$    |
+
+: The PCFG used to model complex and simple predicates in Persian and Hindi. {#tbl-cpsp-pcfg} {tbl-colwidths="[50, 50]"}
+
+### Probabilities
+|                                      | **Description**                                                                                                                                 | **Hindi**                            | **Persian**                           |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| $p(\text{CP})$                       | the probability of the sentence containing a complex predicate.                                                                                 | $`{python} hindi_p_cp`$              | $`{python} persian_p_cp`$             |
+| $p(\text{CP Intervener})$            | the probability of a complex predicate construction having intervening adjuncts.                                                                | $`{python} hindi_p_cp_intv`$         | $`{python} persian_p_cp_intv`$        |
+| $p(\text{CP Short})$                 | the probability of a complex predicate having only one intervener between the noun and the light verb.                                          | $`{python} hindi_p_cp_short`$        | $`{python} persian_p_cp_short`$       |
+| $p(\text{Light verb}\mid \text{CP})$ | the probability of the specific light verb appearing, given that the noun in the sentence was the corresponding complex predicate noun.         | $`{python} hindi_p_cp_lightverb`$    | $`{python} persian_p_cp_lightverb`$   |
+| $p(\text{SP Intervener})$            | the probability of a simple predicate construction having intervening adjuncts.                                                                 | $`{python} hindi_p_sp_intv`$         | $`{python} persian_p_sp_intv`$        |
+| $p(\text{SP Short})$                 | the probability of a simple predicate having only one intervener between the noun and the light verb.                                           | $`{python} hindi_p_sp_short`$        | $`{python} persian_p_sp_short`$       |
+| $p(\text{Light verb}\mid \text{SP})$ | the probability of a the specific light verb appearing, given that the noun in the sentence was *not* the corresponding complex predicate noun. | $`{python} hindi_p_sp_lightverb`$    | $`{python} persian_p_sp_lightverb`$   |
+
+: The probabilities used for the Hindi/Persian grammar. {#tbl-cpsp-probs} {tbl-colwidths="[23, 57, 10, 10]"}
+
+The probabilities of light verbs in the different sentence types were taken from sentence completion studies conducted by @husainetal2014 and @safavietal2016, respectively. The rest were calculated according to @tbl-cpsp-prob-calc.
+
+| **Probability**           | **Expression**                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| $p(\text{CP})$            | $\frac{\text{CPs}}{\text{CPs+SPs}}$                                                                          |
+| $p(\text{SP intervener})$ | $\frac{\text{SPs at least one intervener}}{\text{SPs}}$                                                      |
+| $p(\text{SP Short})$      | $\frac{\text{SPs at least one intervener-SPs at least two interveners}}{\text{SPs at least one intervener}}$ |
+| $p(\text{CP intervener})$ | $\frac{\text{CPs at least one intervener}}{\text{CPs}}$                                                      |
+| $p(\text{CP Short})$      | $\frac{\text{CPs at least one intervener-CPs at least two interveners}}{\text{CPs at least one intervener}}$ |
+
+: Expressions for calculating probabilities for the Persian/Hindi PCFGs. {#tbl-cpsp-prob-calc} {tbl-colwidths="[25, 75]"}
+
+#### Counts
+##### Hindi
+|                      | HDTB | PUD | Total |
+| -------------------- | ---- | --- | ----- |
+| SP                   | 2291 | 493 | 2784  |
+| CP                   | 2808 | 2   | 2810  |
+| SP at least one intv | 122  | 40  | 162   |
+| SP at least two intv | 1    | 0   | 1     |
+| CP at least one intv | 138  | 2   | 140   |
+| CP at least two intv | 0    | 0   | 0     |
+
+##### Persian
+|                      | PerDT | Seraji | Total |
+| -------------------- | ----- | ------ | ----- |
+| SP                   | 3748  | 505    | 4253  |
+| CP                   | 9597  | 1108   | 10705 |
+| SP at least one intv | 80    | 17     | 97    |
+| SP at least two intv | 1     | 0      | 1     |
+| CP at least one intv | 2     | 0      | 2     |
+| CP at least two intv | 0     | 0      | 0     |
+
+#### Queries
+The following queries work for Persian. Because of labeling differences between Hindi and Persian, `compound:lvc` has to be changed to just `compound` for the queries to work for the Hindi corpora.
+
+##### Simple predicates
+*Any number of interveners*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	child a-node [
+		deprel = "obj",
+		tag = "NOUN"
+	],
+	!child a-node [
+	  deprel = "compound:lvc",
+	]
+] >> count()
+```
+
+*With at least one intervener:*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	child a-node $o := [
+		deprel = "obj",
+		tag = "NOUN"
+	],
+	!child a-node [
+	  deprel = "compound:lvc",
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	]
+] >> count()
+```
+
+*With two interveners:*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	child a-node $o := [
+		deprel = "obj",
+		tag = "NOUN"
+	],
+	!child a-node [
+	  deprel = "compound:lvc",
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	]
+] >> count()
+```
+
+##### Complex predicates
+*Any number of interveners:*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	!child a-node [
+		deprel = "obj",
+	],
+	child a-node [
+	  deprel = "compound:lvc",
+	  tag = "NOUN"
+	]
+] >> count()
+```
+
+*With one intervener:*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	!child a-node [
+		deprel = "obj",
+	],
+	child a-node $o := [
+	  deprel = "compound:lvc",
+	  tag = "NOUN"
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	]
+] >> count()
+```
+
+*With two interveners:*
+```
+a-node $v := [
+	tag = "VERB",
+	deprel = "root",
+	!child a-node [
+		deprel = "obj",
+	],
+	child a-node $o := [
+	  deprel = "compound:lvc",
+	  tag = "NOUN"
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	],
+	child a-node [
+		order-precedes $v,
+		order-follows $o,
+		deprel = "advmod"
+	]
+] >> count()
+```
+
+## Results
+```{python}
+#| label: fig-cpsp
+#| fig-pos: H
+#| fig-cap: "Difference in predicted processing difficulty at the light verb between long and short conditions for CPs (left) and SPs (right)."
+#| fig-subcap:
+#|  - "Hindi."
+#|  - "Persian."
+
+split = 20
+shrink = 0.4
+
+fig, axes = plt.subplots(1, 2, sharex = True, sharey = True, layout = "tight")
+
+plot_diff_heatmap("CPNoun Adj1 Adj2 LightVerb".split(),
+                  "CPNoun Adj1 LightVerb".split(),
+                  model_hindi,
+                  axes[0],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+
+plot_diff_heatmap("SPNoun Adj1 Adj2 LightVerb".split(),
+                  "SPNoun Adj1 LightVerb".split(),
+                  model_hindi,
+                  axes[1],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+
+plt.show();
+
+fig, axes = plt.subplots(1, 2, sharex = True, sharey = True, layout = "tight")
+
+plot_diff_heatmap("CPNoun Adj1 Adj2 LightVerb".split(),
+                  "CPNoun Adj1 LightVerb".split(),
+                  model_persian,
+                  axes[0],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
+
+plot_diff_heatmap("SPNoun Adj1 Adj2 LightVerb".split(),
+                  "SPNoun Adj1 LightVerb".split(),
+                  model_persian,
+                  axes[1],
+                  split = split,
+                  shrink = shrink,
+                  render_label = False)
 
 plt.show();
 ```
