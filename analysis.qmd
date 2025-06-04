@@ -249,22 +249,6 @@ save_if_not_none(plot_directory, "fig-rus-acc-heatmap")
 plt.show();
 ```
 
-```{python}
-#| label: fig-rus-exp1b-subjectnp
-#| fig-cap: "Difference in predicted processing difficulty between a pre- and postverbal subject NP with a case-syncretized relative pronoun. Blue indicates a processing advantage for preverbal subject NPs, in line with the empirical results."
-
-plot_diff_heatmap(
-    plt.gca(),
-    "chto Subj".split(),
-    "chto V Subj".split(),
-    model_russian
-)
-
-save_if_not_none(plot_directory, "fig-rus-exp1b-subjectnp")
-
-plt.show();
-```
-
 #### Experiment 1b
 ```{python}
 #| label: fig-rus-exp1b-heatmap-verb
@@ -280,6 +264,22 @@ save_if_not_none(plot_directory, "fig-rus-exp1b-heatmap-src")
 plt.show();
 plot_diff_heatmap(plt.gca(), "chto Subj V".split(), "chto V".split(), model_russian)
 save_if_not_none(plot_directory, "fig-rus-exp1b-heatmap-orc")
+plt.show();
+```
+
+```{python}
+#| label: fig-rus-exp1b-subjectnp
+#| fig-cap: "Difference in predicted processing difficulty between a pre- and postverbal subject NP with a case-syncretized relative pronoun. Blue indicates a processing advantage for preverbal subject NPs, in line with the empirical results."
+
+plot_diff_heatmap(
+    plt.gca(),
+    "chto Subj".split(),
+    "chto V Subj".split(),
+    model_russian
+)
+
+save_if_not_none(plot_directory, "fig-rus-exp1b-subjectnp")
+
 plt.show();
 ```
 
@@ -420,6 +420,8 @@ plt.subplots_adjust(wspace = 0.5)
 plt.show();
 ```
 
+{{< pagebreak >}}
+
 # Persian and Hindi
 ## Empirical plots
 ```{python}
@@ -429,6 +431,7 @@ plt.show();
 #|  - "Hindi."
 #|  - "Persian."
 #| layout-ncol: 2
+#| warning: false
 
 sns.color_palette("Set2")
 
@@ -631,7 +634,7 @@ for i in range(len(max_retention_probabilities)):
 n_hits = len(desired_params)
 ```
 
-There were `{python} n_hits` parameter combinations from @fig-cpsp-heatmap-light-cpvssp-1 yielding the observed interaction in Hindi.
+There were `{python} n_hits` parameter combinations from @fig-cpsp-heatmap-lightvsother-1 yielding the observed interaction in Hindi.
 
 {{< pagebreak >}}
 
